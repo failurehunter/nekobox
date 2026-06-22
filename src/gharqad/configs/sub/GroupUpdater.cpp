@@ -1929,16 +1929,23 @@ void GroupUpdater::Update(
       Configs::profileManager->BatchDeleteProfiles(group->profiles, -999);
       group->profiles.clear();
     } else {
+      QList<int> valid_ids;
       for (auto id : group->profiles){
-        auto key = Configs::ProfileFilterKey(Configs::profileManager->GetProfile(id), false);
+        auto profile = Configs::profileManager->GetProfile(id);
+        if (profile == nullptr) continue;
+        valid_ids.append(id);
+        auto key = Configs::ProfileFilterKey(profile, false);
         // found duplicate profile
         if (rawUpdater->ignore_map.contains(key)){
           ProfilesToDrop << key.key->Id();
           change_text += "[-] " + key.key->DisplayTypeAndName() + "\n";
         }
-        rawUpdater->ignore_map[ 
+        rawUpdater->ignore_map[
            key
         ] = false;
+      }
+      if (valid_ids.size() != group->profiles.size()) {
+        group->profiles = valid_ids;
       }
     }
 

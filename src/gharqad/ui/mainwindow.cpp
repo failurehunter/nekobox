@@ -639,6 +639,7 @@ MainWindow::MainWindow(QWidget *parent)
   post_update_job = [this](std::shared_ptr<Configs::Group> group) {
     QList<std::shared_ptr<Configs::ProxyEntity>> out_all;
     QString change_text;
+    QList<int> all_del_ids;
     if (Configs::dataStore->sub_rm_duplicates) {
       auto &out_all_ids = group->profiles;
       if (out_all_ids.count() > 3000){
@@ -655,12 +656,8 @@ MainWindow::MainWindow(QWidget *parent)
 
       change_text +=
           QObject::tr("\nDeleted %1 Duplicates").arg(out_del.length());
-      if (!out_del.empty()) {
-        QList<int> del_ids;
-        for (const auto &ent : out_del) {
-          del_ids += ent->id;
-        }
-        Configs::profileManager->BatchDeleteProfiles(del_ids);
+      for (const auto &ent : out_del) {
+        all_del_ids += ent->id;
       }
     }
     if (Configs::dataStore->sub_rm_invalid) {
@@ -672,7 +669,6 @@ MainWindow::MainWindow(QWidget *parent)
         Configs::profileManager->FillProfileEnts(out_all, out_all_ids);
       }
       QList<std::shared_ptr<Configs::ProxyEntity>> out_del;
-      QThreadPool *parallelCoreCallPool = new QThreadPool(this);
 
       std::atomic counter(0);
       QMutex mu;
@@ -680,7 +676,7 @@ MainWindow::MainWindow(QWidget *parent)
       int profileSize = out_all.size();
       mu.lock();
       for (const auto &profile : out_all) {
-        parallelCoreCallPool->start(
+        QThreadPool::globalInstance()->start(
             [&out_del, profile, &counter, &mu, profileSize, &access] {
               if (!Configs::IsValid(profile)) {
                 access.lock();
@@ -695,13 +691,12 @@ MainWindow::MainWindow(QWidget *parent)
       mu.unlock();
 
       change_text += QObject::tr("\nDeleted %1 Invalid").arg(out_del.length());
-      if (!out_del.empty()) {
-        QList<int> del_ids;
-        for (const auto &ent : out_del) {
-          del_ids += ent->id;
-        }
-        Configs::profileManager->BatchDeleteProfiles(del_ids);
+      for (const auto &ent : out_del) {
+        all_del_ids += ent->id;
       }
+    }
+    if (!all_del_ids.empty()) {
+      Configs::profileManager->BatchDeleteProfiles(all_del_ids);
     }
     if (Configs::dataStore->sub_url_test) {
       out_all.clear();
@@ -736,6 +731,20 @@ MainWindow::MainWindow(QWidget *parent)
           });
     }
     skip_rm_duplicates:
+    // Clean dead profile IDs from group
+    {
+      QList<int> valid_ids;
+      valid_ids.reserve(group->profiles.size());
+      for (auto id : group->profiles) {
+        if (id >= 0 && Configs::profileManager->GetProfile(id) != nullptr) {
+          valid_ids.append(id);
+        }
+      }
+      if (valid_ids.size() != group->profiles.size()) {
+        group->profiles = valid_ids;
+        group->Save();
+      }
+    }
     MW_show_log(change_text);
   };
 
@@ -4194,6 +4203,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
 // Log
 
 inline void FastAppendTextDocument(const QString &message, QTextDocument *doc) {
+  if (!doc) return;
   QTextCursor cursor(doc);
   cursor.movePosition(QTextCursor::End);
   cursor.beginEditBlock();
