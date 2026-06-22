@@ -669,6 +669,7 @@ MainWindow::MainWindow(QWidget *parent)
         Configs::profileManager->FillProfileEnts(out_all, out_all_ids);
       }
       QList<std::shared_ptr<Configs::ProxyEntity>> out_del;
+      auto *parallelCoreCallPool = new QThreadPool;
 
       std::atomic counter(0);
       QMutex mu;
@@ -676,7 +677,7 @@ MainWindow::MainWindow(QWidget *parent)
       int profileSize = out_all.size();
       mu.lock();
       for (const auto &profile : out_all) {
-        QThreadPool::globalInstance()->start(
+        parallelCoreCallPool->start(
             [&out_del, profile, &counter, &mu, profileSize, &access] {
               if (!Configs::IsValid(profile)) {
                 access.lock();
@@ -689,6 +690,7 @@ MainWindow::MainWindow(QWidget *parent)
       }
       mu.lock();
       mu.unlock();
+      parallelCoreCallPool->deleteLater();
 
       change_text += QObject::tr("\nDeleted %1 Invalid").arg(out_del.length());
       for (const auto &ent : out_del) {
@@ -731,20 +733,7 @@ MainWindow::MainWindow(QWidget *parent)
           });
     }
     skip_rm_duplicates:
-    // Clean dead profile IDs from group
-    {
-      QList<int> valid_ids;
-      valid_ids.reserve(group->profiles.size());
-      for (auto id : group->profiles) {
-        if (id >= 0 && Configs::profileManager->GetProfile(id) != nullptr) {
-          valid_ids.append(id);
-        }
-      }
-      if (valid_ids.size() != group->profiles.size()) {
-        group->profiles = valid_ids;
-        group->Save();
-      }
-    }
+    Configs::profileManager->CleanDeadProfiles(group);
     MW_show_log(change_text);
   };
 

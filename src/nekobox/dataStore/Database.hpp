@@ -135,6 +135,8 @@ namespace Configs {
 
         void BatchDeleteProfiles(const QList<int>& ids, int groupid = -1);
 
+        void CleanDeadProfiles(std::shared_ptr<Group> group);
+
         std::shared_ptr<ProxyEntity> GetProfile(int id);
 
         bool AddGroup(const std::shared_ptr<Group> &ent);

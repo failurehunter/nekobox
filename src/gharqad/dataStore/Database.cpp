@@ -1078,6 +1078,19 @@ void ProfileManager::unlock() { this->mutex.unlock(); }
 
 void ProfileManager::lock() { this->mutex.lock(); }
 
+void ProfileManager::CleanDeadProfiles(std::shared_ptr<Group> group) {
+  QList<int> valid_ids;
+  valid_ids.reserve(group->profiles.size());
+  for (auto id : group->profiles) {
+    if (id >= 0 && GetProfile(id) != nullptr)
+      valid_ids.append(id);
+  }
+  if (valid_ids.size() != group->profiles.size()) {
+    group->profiles = valid_ids;
+    group->Save();
+  }
+}
+
 void ProfileManager::deleteProfile(int id) {
   QList<int> ids = {id};
   BatchDeleteProfiles(ids);

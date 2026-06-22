@@ -1929,11 +1929,9 @@ void GroupUpdater::Update(
       Configs::profileManager->BatchDeleteProfiles(group->profiles, -999);
       group->profiles.clear();
     } else {
-      QList<int> valid_ids;
       for (auto id : group->profiles){
         auto profile = Configs::profileManager->GetProfile(id);
         if (profile == nullptr) continue;
-        valid_ids.append(id);
         auto key = Configs::ProfileFilterKey(profile, false);
         // found duplicate profile
         if (rawUpdater->ignore_map.contains(key)){
@@ -1944,12 +1942,10 @@ void GroupUpdater::Update(
            key
         ] = false;
       }
-      if (valid_ids.size() != group->profiles.size()) {
-        group->profiles = valid_ids;
-      }
     }
 
     group->Save();
+    Configs::profileManager->CleanDeadProfiles(group);
     auto extra = group->getExtraUnlocked();
     extra->sub_last_update = QDateTime::currentMSecsSinceEpoch() / 1000;
     extra->info = sub_user_info;
